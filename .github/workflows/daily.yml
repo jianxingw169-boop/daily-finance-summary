@@ -1,0 +1,29 @@
+name: Daily Finance Summary
+
+on:
+  schedule:
+    # 每天北京时间 10:00 (UTC+8 → UTC 02:00)
+    - cron: "0 2 * * *"
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily summary
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
+        run: python main.py --once
