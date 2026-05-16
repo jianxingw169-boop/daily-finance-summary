@@ -1,0 +1,18 @@
+{
+  "name": "食品柜盘点",
+  "short_name": "盘点",
+  "description": "超市食品柜每日盘点对账工具",
+  "start_url": "盘点对账.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8F0",
+  "theme_color": "#FF7E67",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%23FF7E67'/%3E%3Ctext x='96' y='128' font-size='100' text-anchor='middle' fill='white'%3E🥜%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
