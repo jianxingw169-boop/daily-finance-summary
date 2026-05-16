@@ -1,7 +1,7 @@
 {
-  "name": "食品柜盘点",
-  "short_name": "盘点",
-  "description": "超市食品柜每日盘点对账工具",
+  "name": "双隆购物中心 · 库存管理",
+  "short_name": "双隆库存",
+  "description": "双隆购物中心每日盘点对账工具",
   "start_url": "盘点对账.html",
   "scope": ".",
   "display": "standalone",
@@ -10,7 +10,7 @@
   "theme_color": "#FF7E67",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%23FF7E67'/%3E%3Ctext x='96' y='128' font-size='100' text-anchor='middle' fill='white'%3E🥜%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%23FF7E67'/%3E%3Ctext x='96' y='128' font-size='90' text-anchor='middle' fill='white'%3E🏬%3C/text%3E%3C/svg%3E",
       "sizes": "192x192",
       "type": "image/svg+xml"
     }
