@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>食品柜盘点对账</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; max-width: 480px; margin: 0 auto; min-height: 100vh; }
+header { background: #e74c3c; color: #fff; padding: 14px 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
+header h1 { font-size: 20px; font-weight: 600; }
+header .date { font-size: 13px; opacity: 0.9; margin-top: 2px; }
+.tabs { display: flex; background: #fff; border-bottom: 2px solid #eee; position: sticky; top: 78px; z-index: 9; }
+.tab { flex: 1; text-align: center; padding: 12px 0; font-size: 15px; cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; }
+.tab.active { color: #e74c3c; border-bottom-color: #e74c3c; font-weight: 600; }
+.panel { padding: 16px; display: none; }
+.panel.active { display: block; }
+
+/* 商品卡片 */
+.product-card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.product-card .name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.product-card .pname { font-size: 16px; font-weight: 600; }
+.product-card .actions { display: flex; gap: 8px; }
+.btn-del { background: none; border: 1px solid #ddd; color: #999; width: 28px; height: 28px; border-radius: 50%; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.input-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 6px; }
+.input-group { display: flex; flex-direction: column; }
+.input-group label { font-size: 11px; color: #888; margin-bottom: 3px; }
+.input-group input { width: 100%; padding: 8px 4px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; text-align: center; -webkit-appearance: none; }
+.input-group input:focus { border-color: #e74c3c; outline: none; }
+.result-row { display: flex; justify-content: space-around; background: #fafafa; border-radius: 6px; padding: 8px; margin-top: 6px; font-size: 12px; }
+.result-item { text-align: center; }
+.result-item .val { font-size: 18px; font-weight: 700; }
+.result-item .val.red { color: #e74c3c; }
+.result-item .val.green { color: #27ae60; }
+.result-item .lbl { color: #888; font-size: 11px; }
+
+/* 底部按钮 */
+.btn-row { display: flex; gap: 10px; margin: 16px 0; }
+.btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; font-weight: 600; }
+.btn-add { background: #e74c3c; color: #fff; }
+.btn-save { background: #27ae60; color: #fff; }
+.btn-outline { background: #fff; border: 1px solid #e74c3c; color: #e74c3c; }
+.btn-small { padding: 8px 16px; font-size: 13px; background: #f0f0f0; border: none; border-radius: 6px; cursor: pointer; }
+
+/* 添加商品弹窗 */
+.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+.modal.show { display: flex; }
+.modal-inner { background: #fff; border-radius: 12px; padding: 20px; width: 85%; max-width: 360px; }
+.modal-inner h3 { margin-bottom: 12px; font-size: 17px; }
+.modal-inner input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
+.modal-inner .btn-row { margin-bottom: 0; }
+
+/* 记录页面 */
+.record-day { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.record-day .rdate { font-size: 14px; font-weight: 600; color: #e74c3c; margin-bottom: 8px; }
+.record-day .ritem { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; border-bottom: 1px dotted #eee; }
+.ritem .diff-red { color: #e74c3c; font-weight: 600; }
+
+.empty-state { text-align: center; padding: 60px 20px; color: #bbb; }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+/* 汇总 */
+.summary-bar { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 16px; display: flex; justify-content: space-around; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.summary-bar .num { font-size: 24px; font-weight: 700; }
+.summary-bar .lbl { font-size: 12px; color: #888; }
+
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 14px; z-index: 200; display: none; }
+.toast.show { display: block; animation: fadeInOut 1.8s ease; }
+@keyframes fadeInOut { 0%,100% { opacity: 0; } 20%,70% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>食品柜盘点对账</h1>
+  <div class="date" id="todayDate"></div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('inventory')">今日盘点</div>
+  <div class="tab" onclick="switchTab('records')">历史记录</div>
+</div>
+
+<div class="panel active" id="panel-inventory">
+  <div class="summary-bar" id="summaryBar">
+    <div><div class="num" id="totalProducts">0</div><div class="lbl">商品数</div></div>
+    <div><div class="num" style="color:#e74c3c" id="totalDiff">0</div><div class="lbl">总差异(件)</div></div>
+    <div><div class="num" style="color:#27ae60" id="totalSales">0</div><div class="lbl">应售(件)</div></div>
+  </div>
+  <div id="productList"></div>
+  <div class="btn-row">
+    <button class="btn btn-add" onclick="showAddModal()">+ 添加商品</button>
+    <button class="btn btn-save" onclick="saveToday()">保存记录</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-outline" onclick="loadYesterday()">继承昨日盘点数</button>
+    <button class="btn btn-outline" onclick="clearAll()">清空重置</button>
+  </div>
+</div>
+
+<div class="panel" id="panel-records">
+  <div id="recordList"></div>
+</div>
+
+<div class="modal" id="addModal">
+  <div class="modal-inner">
+    <h3>添加商品</h3>
+    <input type="text" id="newProductName" placeholder="输入商品名称" autocomplete="off">
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="hideAddModal()">取消</button>
+      <button class="btn btn-add" onclick="addProduct()">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// 数据存储
+const STORAGE_KEY = 'pandian_products';
+const RECORDS_KEY = 'pandian_records';
+
+function getProducts() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveProducts(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveRecords(data) {
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(data));
+}
+
+// 初始化
+document.getElementById('todayDate').textContent = '今天 ' + getDateStr();
+let products = getProducts();
+let currentTab = 'inventory';
+
+if (!products.length) {
+  // 首次使用，放几个示例
+  products = [
+    { name: '示例：旺旺雪饼', opening: '', received: '', closing: '', realSales: '' },
+    { name: '示例：德芙巧克力', opening: '', received: '', closing: '', realSales: '' },
+  ];
+  saveProducts(products);
+}
+
+renderInventory();
+renderRecords();
+
+function getDateStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function getDateStrCompact() {
+  const d = new Date();
+  return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0 && tab==='inventory') || (i===1 && tab==='records')));
+  document.querySelectorAll('.panel').forEach((p,i) => p.classList.toggle('active', (i===0 && tab==='inventory') || (i===1 && tab==='records')));
+  if (tab === 'records') renderRecords();
+}
+
+function calcCard(p) {
+  const open = parseFloat(p.opening) || 0;
+  const recv = parseFloat(p.received) || 0;
+  const close = parseFloat(p.closing) || 0;
+  const real = parseFloat(p.realSales) || 0;
+  const shouldSell = open + recv - close;
+  const diff = shouldSell - real;
+  return { shouldSell: Math.max(0, shouldSell), diff };
+}
+
+function updateSummary() {
+  let totalDiff = 0, totalSales = 0;
+  products.forEach(p => {
+    const c = calcCard(p);
+    totalDiff += Math.abs(c.diff);
+    totalSales += c.shouldSell;
+  });
+  document.getElementById('totalProducts').textContent = products.length;
+  document.getElementById('totalDiff').textContent = totalDiff;
+  document.getElementById('totalSales').textContent = totalSales;
+}
+
+function renderInventory() {
+  const list = document.getElementById('productList');
+  if (!products.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">📋</div>还没有商品，点下方按钮添加</div>';
+    updateSummary();
+    return;
+  }
+  list.innerHTML = products.map((p, i) => {
+    const c = calcCard(p);
+    const diffClass = c.diff === 0 ? 'green' : 'red';
+    const diffSign = c.diff >= 0 ? '+' : '';
+    return `<div class="product-card">
+      <div class="name-row">
+        <span class="pname">${escHtml(p.name)}</span>
+        <button class="btn-del" onclick="deleteProduct(${i})" title="删除">×</button>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>期初库存</label>
+          <input type="number" placeholder="早" value="${p.opening}" onchange="updateProduct(${i},'opening',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <label>今日进货</label>
+          <input type="number" placeholder="进" value="${p.received}" onchange="updateProduct(${i},'received',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <label>期末盘点</label>
+          <input type="number" placeholder="晚" value="${p.closing}" onchange="updateProduct(${i},'closing',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <label>实售(POS)</label>
+          <input type="number" placeholder="实" value="${p.realSales}" onchange="updateProduct(${i},'realSales',this.value)" inputmode="numeric">
+        </div>
+      </div>
+      <div class="result-row">
+        <div class="result-item"><span class="lbl">应售</span><br><span class="val">${c.shouldSell}</span></div>
+        <div class="result-item"><span class="lbl">差异</span><br><span class="val ${diffClass}">${diffSign}${c.diff}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  updateSummary();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateProduct(i, field, val) {
+  products[i][field] = val;
+  saveProducts(products);
+  renderInventory();
+}
+
+function deleteProduct(i) {
+  if (!confirm('确定删除「' + products[i].name + '」？')) return;
+  products.splice(i, 1);
+  saveProducts(products);
+  renderInventory();
+  toast('已删除');
+}
+
+function showAddModal() {
+  document.getElementById('addModal').classList.add('show');
+  document.getElementById('newProductName').value = '';
+  setTimeout(() => document.getElementById('newProductName').focus(), 200);
+}
+function hideAddModal() {
+  document.getElementById('addModal').classList.remove('show');
+}
+function addProduct() {
+  const name = document.getElementById('newProductName').value.trim();
+  if (!name) return;
+  products.push({ name, opening: '', received: '', closing: '', realSales: '' });
+  saveProducts(products);
+  hideAddModal();
+  renderInventory();
+  toast('已添加「' + name + '」');
+}
+document.getElementById('newProductName').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') addProduct();
+});
+
+function saveToday() {
+  const date = getDateStr();
+  const items = products.map(p => {
+    const c = calcCard(p);
+    return { name: p.name, opening: parseFloat(p.opening)||0, received: parseFloat(p.received)||0,
+             closing: parseFloat(p.closing)||0, shouldSell: c.shouldSell,
+             realSales: parseFloat(p.realSales)||0, diff: c.diff };
+  });
+  const records = getRecords();
+  // 去重今天
+  const filtered = records.filter(r => r.date !== date);
+  filtered.unshift({ date, items });
+  saveRecords(filtered);
+  toast('已保存');
+  // 更新期末库存为期初库存（用于明天）
+  // 不自动更新，让用户自行决定
+}
+
+function loadYesterday() {
+  const records = getRecords();
+  if (!records.length) { toast('没有历史记录'); return; }
+  const yesterday = records[0];
+  if (!confirm('用「' + yesterday.date + '」的期末盘点作为今天的期初库存？')) return;
+  yesterday.items.forEach(item => {
+    const found = products.find(p => p.name === item.name);
+    if (found) found.opening = item.closing;
+  });
+  saveProducts(products);
+  renderInventory();
+  toast('已继承');
+}
+
+function clearAll() {
+  if (!confirm('清空所有商品和今日数据？（不会删除历史记录）')) return;
+  products = [];
+  saveProducts(products);
+  renderInventory();
+  toast('已清空');
+}
+
+function renderRecords() {
+  const list = document.getElementById('recordList');
+  const records = getRecords();
+  if (!records.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">📭</div>暂无记录<br>盘点后记得保存</div>';
+    return;
+  }
+  list.innerHTML = records.map(r => {
+    let totalDiff = 0;
+    const itemsHtml = r.items.map(it => {
+      totalDiff += Math.abs(it.diff);
+      return `<div class="ritem">
+        <span>${escHtml(it.name)}</span>
+        <span>应售${it.shouldSell} | 实售${it.realSales}
+          <span class="${it.diff !== 0 ? 'diff-red' : ''}">${it.diff !== 0 ? '差'+it.diff : '✓'}</span>
+        </span>
+      </div>`;
+    }).join('');
+    const alertClass = totalDiff > 0 ? 'color:#e74c3c;' : 'color:#27ae60;';
+    return `<div class="record-day">
+      <div class="rdate">${r.date} <span style="font-weight:400;font-size:12px;${alertClass}">差异合计 ${totalDiff} 件</span></div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+</script>
+</body>
+</html>

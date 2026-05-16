@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>食品柜盘点</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #FFF8F0; font-size: 18px; color: #2D3436;
+  max-width: 500px; margin: 0 auto; min-height: 100vh;
+}
+header {
+  background: linear-gradient(135deg, #FF7E67, #FF9A76);
+  color: #fff; padding: 18px 20px 14px;
+  text-align: center; position: sticky; top: 0; z-index: 10;
+}
+header h1 { font-size: 24px; font-weight: 700; letter-spacing: 1px; }
+header .sub { font-size: 14px; opacity: 0.9; margin-top: 4px; }
+.step-bar {
+  background: #fff; padding: 10px 12px;
+  display: flex; justify-content: space-around;
+  border-bottom: 1px solid #f0e8e0;
+  position: sticky; top: 76px; z-index: 9;
+}
+.step-item { text-align: center; font-size: 12px; color: #ccc; flex:1; }
+.step-item .step-icon { font-size: 18px; display: block; margin-bottom: 1px; }
+.step-item.active { color: #FF7E67; font-weight: 600; }
+
+/* ===== 汇总 ===== */
+.snap-bar {
+  display: flex; gap: 8px; margin: 12px 16px 8px;
+}
+.snap-item {
+  flex: 1; background: #fff; border-radius: 12px;
+  padding: 10px 6px; text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.snap-item .num { font-size: 24px; font-weight: 800; }
+.snap-item .lbl { font-size: 12px; color: #999; margin-top: 1px; }
+.snap-item .num.green { color: #00B894; }
+.snap-item .num.red { color: #FF6B6B; }
+.snap-item .num.orange { color: #FF9A76; }
+
+/* ===== 补货提示 ===== */
+.replenish-box {
+  margin: 0 16px 12px; display: none;
+}
+.replenish-box.show { display: block; }
+.replenish-inner {
+  background: #FFF3E0; border: 2px solid #FFB74D; border-radius: 12px;
+  padding: 14px 16px;
+}
+.replenish-inner .title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.replenish-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px dashed #f0d5b0; font-size: 15px;
+}
+.replenish-item:last-child { border-bottom: none; }
+.replenish-item .ri-name { font-weight: 600; }
+.replenish-item .ri-info { color: #666; font-size: 14px; }
+.replenish-item .ri-qty {
+  background: #FF7E67; color: #fff; padding: 4px 12px;
+  border-radius: 20px; font-size: 14px; font-weight: 700;
+}
+
+/* ===== 商品卡片 ===== */
+#productList { padding: 0 16px; }
+.product-card {
+  background: #fff; border-radius: 16px; padding: 16px;
+  margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #f5ede5;
+  position: relative;
+}
+.product-card.promo {
+  border-color: #FF9A76; box-shadow: 0 2px 12px rgba(255,126,103,0.15);
+}
+.promo-tag {
+  position: absolute; top: -1px; right: 16px;
+  background: #FF7E67; color: #fff;
+  font-size: 12px; padding: 2px 10px; border-radius: 0 0 8px 8px;
+}
+.card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.card-header .pname { font-size: 20px; font-weight: 700; }
+.card-header .del-btn {
+  background: none; border: none; color: #ddd;
+  font-size: 24px; width: 40px; height: 40px;
+  cursor: pointer; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.card-header .del-btn:active { background: #f5f5f5; color: #FF6B6B; }
+.input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.input-group { display: flex; flex-direction: column; }
+.input-group .field-label { font-size: 13px; color: #999; margin-bottom: 2px; }
+.input-group input {
+  width: 100%; padding: 10px 6px;
+  border: 2px solid #f0e8e0; border-radius: 8px;
+  font-size: 20px; text-align: center; font-weight: 600;
+  -webkit-appearance: none; background: #FFFAF7;
+  transition: border-color 0.2s;
+}
+.input-group input:focus { border-color: #FF7E67; outline: none; background: #fff; }
+.input-group input::placeholder { font-weight: 400; font-size: 13px; color: #ddd; }
+.result-row {
+  display: flex; gap: 12px; margin-top: 12px;
+  background: #FFFAF7; border-radius: 10px; padding: 10px;
+}
+.result-item { flex: 1; text-align: center; }
+.result-item .rval { font-size: 24px; font-weight: 800; }
+.result-item .rval.green { color: #00B894; }
+.result-item .rval.red { color: #FF6B6B; }
+.result-item .rlbl { font-size: 12px; color: #999; }
+
+/* ===== 更多资料（折叠） ===== */
+.more-toggle {
+  margin-top: 10px; text-align: center;
+  font-size: 14px; color: #bbb; cursor: pointer;
+  padding: 4px; user-select: none;
+}
+.more-toggle:active { color: #999; }
+.more-body { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #f0e8e0; }
+.more-body.open { display: block; }
+.more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.more-grid .input-group input { font-size: 18px; }
+.more-grid .full-width { grid-column: 1 / -1; }
+
+/* 报损原因选择 */
+.loss-reason-row { display: flex; gap: 6px; margin-top: 4px; }
+.loss-chip {
+  flex: 1; text-align: center; padding: 8px 4px;
+  border: 2px solid #f0e8e0; border-radius: 8px;
+  font-size: 14px; cursor: pointer; background: #fff;
+  transition: all 0.15s;
+}
+.loss-chip.selected { border-color: #FF7E67; background: #FFF3F0; color: #FF7E67; font-weight: 600; }
+.loss-chip:active { transform: scale(0.95); }
+
+/* 促销开关 */
+.promo-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border: 2px solid #f0e8e0; border-radius: 8px;
+  cursor: pointer; user-select: none; font-size: 15px;
+  justify-content: center;
+}
+.promo-toggle.on { border-color: #FF7E67; background: #FFF3F0; }
+.promo-toggle .switch {
+  width: 44px; height: 26px; background: #ddd; border-radius: 13px;
+  position: relative; transition: background 0.2s; flex-shrink: 0;
+}
+.promo-toggle .switch:after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 22px; height: 22px; background: #fff; border-radius: 50%;
+  transition: transform 0.2s;
+}
+.promo-toggle.on .switch { background: #FF7E67; }
+.promo-toggle.on .switch:after { transform: translateX(18px); }
+
+/* ===== 按钮 ===== */
+.btn-row { padding: 0 16px; display: flex; gap: 10px; margin: 8px 0; }
+.btn {
+  flex: 1; padding: 14px; border: none; border-radius: 12px;
+  font-size: 17px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  transition: transform 0.1s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #FF7E67; color: #fff; box-shadow: 0 4px 10px rgba(255,126,103,0.3); }
+.btn-success { background: #00B894; color: #fff; box-shadow: 0 4px 10px rgba(0,184,148,0.3); }
+.btn-outline { background: #fff; border: 2px solid #f0e8e0; color: #666; }
+.btn-sm { padding: 10px 14px; font-size: 14px; flex: 0 1 auto; }
+
+/* ===== 弹窗 ===== */
+.modal {
+  display: none; position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.4); z-index:100;
+  justify-content: center; align-items: center;
+}
+.modal.show { display: flex; }
+.modal-inner {
+  background: #fff; border-radius: 20px; padding: 24px;
+  width: 85%; max-width: 380px; box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+}
+.modal-inner h3 { font-size: 20px; margin-bottom: 16px; }
+.modal-inner input {
+  width: 100%; padding: 14px 12px;
+  border: 2px solid #f0e8e0; border-radius: 10px;
+  font-size: 18px; margin-bottom: 16px;
+}
+.modal-inner input:focus { border-color: #FF7E67; outline: none; }
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.8); color: #fff;
+  padding: 14px 28px; border-radius: 30px;
+  font-size: 17px; z-index: 200;
+  display: none; white-space: nowrap;
+}
+.toast.show { display: block; animation: toastAnim 2s ease; }
+@keyframes toastAnim {
+  0%,100% { opacity:0; transform:translateX(-50%) translateY(10px); }
+  15%,80% { opacity:1; transform:translateX(-50%) translateY(0); }
+}
+
+/* ===== 历史 ===== */
+.history-wrap { margin: 8px 16px 24px; }
+.history-toggle {
+  background: #fff; border: 1px solid #f0e8e0; border-radius: 12px;
+  padding: 14px 16px; font-size: 16px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; color: #666;
+}
+.history-toggle:after { content:'›'; font-size:20px; transition:transform .2s; }
+.history-toggle.open:after { transform:rotate(90deg); }
+.history-body { display:none; margin-top:10px; }
+.history-body.open { display:block; }
+.record-day {
+  background:#fff; border-radius:12px; padding:14px 16px;
+  margin-bottom:10px; border:1px solid #f5ede5;
+}
+.record-day .rdate { font-size:15px; font-weight:600; color:#FF7E67; margin-bottom:8px; }
+.record-day .ritem {
+  display:flex; justify-content:space-between;
+  font-size:14px; padding:4px 0; border-bottom:1px dotted #f0e8e0;
+}
+.ritem .diff-bad { color:#FF6B6B; font-weight:700; }
+.ritem .diff-good { color:#00B894; }
+.record-day .rloss { font-size:12px; color:#999; margin-top:4px; }
+.action-row { padding:0 16px; display:flex; gap:10px; flex-wrap:wrap; }
+.action-row .btn { flex:0 1 auto; padding:10px 18px; font-size:14px; font-weight:500; }
+.empty-state { text-align:center; padding:60px 20px; color:#ccc; font-size:16px; line-height:1.8; }
+.empty-state .big-icon { font-size:56px; margin-bottom:12px; }
+.inherit-banner {
+  background:#FFF3E0; border:2px solid #FFB74D; border-radius:12px;
+  padding:12px 16px; margin:0 16px 12px;
+  display:none; align-items:center; gap:10px; font-size:15px;
+}
+.inherit-banner.show { display:flex; }
+.inherit-banner .ib-icon { font-size:24px; }
+.inherit-banner .ib-text { flex:1; }
+.inherit-banner .ib-btn {
+  background:#FFB74D; border:none; color:#fff;
+  padding:8px 16px; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+.inherit-banner .ib-skip {
+  background:none; border:none; color:#999; font-size:13px; cursor:pointer; padding:6px;
+}
+.export-content {
+  background:#f9f9f9; border-radius:10px; padding:14px;
+  font-size:14px; line-height:1.6; max-height:200px; overflow-y:auto;
+  margin-bottom:12px; white-space:pre-wrap; font-family:monospace;
+}
+::-webkit-scrollbar { width:0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🥜 食品柜盘点</h1>
+  <div class="sub" id="todayDate"></div>
+</header>
+
+<!-- 步骤 -->
+<div class="step-bar">
+  <div class="step-item" id="step1"><span class="step-icon">🌅</span>早上</div>
+  <div class="step-item" id="step2"><span class="step-icon">🚚</span>进货</div>
+  <div class="step-item" id="step3"><span class="step-icon">🌙</span>晚上</div>
+  <div class="step-item" id="step4"><span class="step-icon">📋</span>补货</div>
+  <div class="step-item" id="step5"><span class="step-icon">💾</span>保存</div>
+</div>
+
+<!-- 继承提示 -->
+<div class="inherit-banner" id="inheritBanner">
+  <span class="ib-icon">📦</span>
+  <span class="ib-text" id="inheritText">要用昨天的库存数吗？</span>
+  <button class="ib-btn" onclick="doInherit()">好的</button>
+  <button class="ib-skip" onclick="hideInheritBanner()">不用</button>
+</div>
+
+<!-- 汇总快照 -->
+<div class="snap-bar">
+  <div class="snap-item"><div class="num" id="totalProducts">0</div><div class="lbl">商品</div></div>
+  <div class="snap-item"><div class="num red" id="totalDiff">0</div><div class="lbl">差异(件)</div></div>
+  <div class="snap-item"><div class="num orange" id="totalLoss">0</div><div class="lbl">报损(件)</div></div>
+  <div class="snap-item"><div class="num green" id="totalSales">0</div><div class="lbl">应售(件)</div></div>
+</div>
+
+<!-- 补货提示 -->
+<div class="replenish-box" id="replenishBox">
+  <div class="replenish-inner">
+    <div class="title">📋 需要补货</div>
+    <div id="replenishList"></div>
+  </div>
+</div>
+
+<!-- 商品列表 -->
+<div id="productList"></div>
+
+<!-- 按钮 -->
+<div class="btn-row">
+  <button class="btn btn-primary" onclick="showAddModal()">➕ 添加商品</button>
+  <button class="btn btn-success" onclick="saveToday()">💾 保存今天</button>
+</div>
+<div class="action-row">
+  <button class="btn btn-outline btn-sm" onclick="loadYesterday()">📋 继承昨日</button>
+  <button class="btn btn-outline btn-sm" onclick="showExportModal()">📤 分享</button>
+  <button class="btn btn-outline btn-sm" onclick="clearAll()">🔄 重置</button>
+</div>
+
+<!-- 历史 -->
+<div class="history-wrap">
+  <div class="history-toggle" id="historyToggle" onclick="toggleHistory()">📅 历史记录</div>
+  <div class="history-body" id="historyBody"><div id="recordList"></div></div>
+</div>
+
+<!-- 添加弹窗 -->
+<div class="modal" id="addModal">
+  <div class="modal-inner">
+    <h3>➕ 添加商品</h3>
+    <input type="text" id="newProductName" placeholder="比如：旺旺雪饼" autocomplete="off">
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-outline" onclick="hideAddModal()" style="flex:1;">取消</button>
+      <button class="btn btn-primary" onclick="addProduct()" style="flex:2;">确定添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分享弹窗 -->
+<div class="modal" id="exportModal">
+  <div class="modal-inner">
+    <h3>📤 分享对账结果</h3>
+    <div class="export-content" id="exportContent"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-outline" onclick="hideExportModal()" style="flex:1;">关闭</button>
+      <button class="btn btn-primary" onclick="copyExport()" style="flex:2;">📋 复制到微信</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 数据 =====
+const STORAGE_KEY = 'pandian_products';
+const RECORDS_KEY = 'pandian_records';
+
+function getProducts() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { return []; }
+}
+function saveProducts(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || []; } catch(e) { return []; }
+}
+function saveRecords(data) { localStorage.setItem(RECORDS_KEY, JSON.stringify(data)); }
+
+function getDateStr() {
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== 初始化 =====
+const today = getDateStr();
+document.getElementById('todayDate').textContent = '📅 ' + today;
+
+let products = getProducts();
+if (!products.length) {
+  products = [
+    { name:'🍪 旺旺雪饼', opening:'', received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false },
+    { name:'🍫 德芙巧克力', opening:'', received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false },
+    { name:'🥜 洽洽瓜子', opening:'', received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false },
+    { name:'🍭 阿尔卑斯糖', opening:'', received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false },
+  ];
+  saveProducts(products);
+}
+
+renderAll();
+checkAutoInherit();
+
+// ===== 核心计算 =====
+function calcCard(p) {
+  const open = parseFloat(p.opening) || 0;
+  const recv = parseFloat(p.received) || 0;
+  const close = parseFloat(p.closing) || 0;
+  const real = parseFloat(p.realSales) || 0;
+  const loss = parseFloat(p.loss) || 0;
+  // 应售 = 期初 + 进货 - 盘点 - 报损
+  const shouldSell = open + recv - close - loss;
+  const diff = shouldSell - real;
+  return { shouldSell: Math.max(0, shouldSell), diff, loss };
+}
+
+// ===== 更新汇总 + 补货 =====
+function updateAll() {
+  let totalDiff = 0, totalSales = 0, totalLoss = 0;
+  products.forEach(p => {
+    const c = calcCard(p);
+    totalDiff += Math.abs(c.diff);
+    totalSales += c.shouldSell;
+    totalLoss += c.loss;
+  });
+  document.getElementById('totalProducts').textContent = products.length;
+  document.getElementById('totalDiff').textContent = totalDiff;
+  document.getElementById('totalSales').textContent = totalSales;
+  document.getElementById('totalLoss').textContent = totalLoss;
+
+  // 步骤
+  document.getElementById('step1').classList.toggle('active', products.some(p => p.opening !== ''));
+  document.getElementById('step2').classList.toggle('active', products.some(p => p.received !== ''));
+  document.getElementById('step3').classList.toggle('active', products.some(p => p.closing !== '' || p.realSales !== ''));
+  document.getElementById('step4').classList.toggle('active', products.some(p => p.minStock !== '' && parseFloat(p.closing||0) < parseFloat(p.minStock)));
+  document.getElementById('step5').classList.toggle('active', false); // 保存手动
+
+  // 补货清单
+  renderReplenish();
+}
+
+function renderReplenish() {
+  const need = [];
+  products.forEach((p, i) => {
+    const close = parseFloat(p.closing) || 0;
+    const min = parseFloat(p.minStock) || 0;
+    if (min > 0 && close < min) {
+      need.push({ name: p.name, closing: close, min, index: i });
+    }
+  });
+  const box = document.getElementById('replenishBox');
+  const list = document.getElementById('replenishList');
+  if (!need.length) { box.classList.remove('show'); return; }
+  box.classList.add('show');
+  list.innerHTML = need.map(n =>
+    `<div class="replenish-item">
+      <div><span class="ri-name">${escHtml(n.name)}</span>
+      <span class="ri-info">库存${n.closing} &lt; 预警${n.min}</span></div>
+      <span class="ri-qty">建议补${n.min * 2 - n.closing}件</span>
+    </div>`
+  ).join('');
+}
+
+// ===== 渲染 =====
+function renderAll() {
+  renderInventory();
+  renderRecords();
+}
+
+function renderInventory() {
+  const list = document.getElementById('productList');
+  if (!products.length) {
+    list.innerHTML = '<div class="empty-state"><div class="big-icon">📋</div>还没有商品<br>点下面的「添加商品」按钮</div>';
+    updateAll();
+    return;
+  }
+  list.innerHTML = products.map((p, i) => {
+    const c = calcCard(p);
+    const diffClass = c.diff === 0 ? 'green' : 'red';
+    const diffText = c.diff === 0 ? '✅ 对上了' : (c.diff > 0 ? '+' : '') + c.diff + '件';
+    const promoCls = p.isPromo ? 'promo' : '';
+    const promoTag = p.isPromo ? '<div class="promo-tag">🔥 促销</div>' : '';
+    return `<div class="product-card ${promoCls}">
+      ${promoTag}
+      <div class="card-header">
+        <span class="pname">${escHtml(p.name)}</span>
+        <button class="del-btn" onclick="deleteProduct(${i})">✕</button>
+      </div>
+      <div class="input-grid">
+        <div class="input-group">
+          <div class="field-label">🌅 早上库存</div>
+          <input type="number" placeholder="填数量" value="${p.opening}" onchange="updateProduct(${i},'opening',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <div class="field-label">🚚 今日进货</div>
+          <input type="number" placeholder="填数量" value="${p.received}" onchange="updateProduct(${i},'received',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <div class="field-label">🌙 晚上盘点</div>
+          <input type="number" placeholder="填数量" value="${p.closing}" onchange="updateProduct(${i},'closing',this.value)" inputmode="numeric">
+        </div>
+        <div class="input-group">
+          <div class="field-label">🧾 收银机销量</div>
+          <input type="number" placeholder="填数量" value="${p.realSales}" onchange="updateProduct(${i},'realSales',this.value)" inputmode="numeric">
+        </div>
+      </div>
+      <div class="result-row">
+        <div class="result-item"><div class="rlbl">📊 应售</div><div class="rval">${c.shouldSell}</div></div>
+        <div class="result-item"><div class="rlbl">${c.diff === 0 ? '✅ 差异' : '⚠️ 差异'}</div><div class="rval ${diffClass}">${diffText}</div></div>
+        ${c.loss > 0 ? `<div class="result-item"><div class="rlbl">📦 报损</div><div class="rval orange" style="color:#FF9A76;">${c.loss}件</div></div>` : ''}
+      </div>
+      <div class="more-toggle" onclick="toggleMore(${i})" id="moreToggle${i}">▼ 更多资料</div>
+      <div class="more-body" id="moreBody${i}">
+        <div class="more-grid">
+          <div class="input-group">
+            <div class="field-label">📦 报损数量</div>
+            <input type="number" placeholder="坏的过期的" value="${p.loss}" onchange="updateProduct(${i},'loss',this.value)" inputmode="numeric">
+          </div>
+          <div class="input-group">
+            <div class="field-label">⚠️ 报损原因</div>
+            <div class="loss-reason-row">
+              <div class="loss-chip ${p.lossReason==='spoil'?'selected':''}" onclick="setLossReason(${i},'spoil')">过期</div>
+              <div class="loss-chip ${p.lossReason==='damage'?'selected':''}" onclick="setLossReason(${i},'damage')">破损</div>
+              <div class="loss-chip ${p.lossReason==='return'?'selected':''}" onclick="setLossReason(${i},'return')">退货</div>
+            </div>
+          </div>
+          <div class="input-group">
+            <div class="field-label">📉 最低库存预警</div>
+            <input type="number" placeholder="低于这个数要补货" value="${p.minStock}" onchange="updateProduct(${i},'minStock',this.value)" inputmode="numeric">
+          </div>
+          <div class="input-group">
+            <div class="field-label">🔥 今日促销</div>
+            <div class="promo-toggle ${p.isPromo?'on':''}" onclick="togglePromo(${i})">
+              <span class="switch"></span>
+              <span>${p.isPromo ? '促销中' : '未促销'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  updateAll();
+}
+
+function toggleMore(i) {
+  const body = document.getElementById('moreBody' + i);
+  const toggle = document.getElementById('moreToggle' + i);
+  body.classList.toggle('open');
+  toggle.textContent = body.classList.contains('open') ? '▲ 收起' : '▼ 更多资料';
+}
+
+function setLossReason(i, reason) {
+  products[i].lossReason = products[i].lossReason === reason ? '' : reason;
+  saveProducts(products);
+  renderInventory();
+}
+
+function togglePromo(i) {
+  products[i].isPromo = !products[i].isPromo;
+  saveProducts(products);
+  renderInventory();
+}
+
+function renderRecords() {
+  const list = document.getElementById('recordList');
+  const records = getRecords();
+  if (!records.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:#ccc;">暂无历史记录</div>';
+    return;
+  }
+  list.innerHTML = records.map(r => {
+    let totalDiff = 0, totalLoss = 0;
+    const itemsHtml = r.items.map(it => {
+      totalDiff += Math.abs(it.diff);
+      totalLoss += it.loss || 0;
+      const status = it.diff === 0 ? '✅' : '❌ 差' + it.diff;
+      const cls = it.diff === 0 ? 'diff-good' : 'diff-bad';
+      const promo = it.isPromo ? ' 🔥' : '';
+      const lossNote = (it.loss||0) > 0 ? ` 📦报损${it.loss}` : '';
+      return `<div class="ritem">
+        <span>${escHtml(it.name)}${promo}</span>
+        <span>应${it.shouldSell} 实${it.realSales} <span class="${cls}">${status}</span>${lossNote}</span>
+      </div>`;
+    }).join('');
+    const statusIcon = totalDiff === 0 ? '✅' : '⚠️';
+    const lossText = totalLoss > 0 ? ` | 报损${totalLoss}件` : '';
+    return `<div class="record-day">
+      <div class="rdate">${r.date} <span style="font-weight:400;font-size:13px;${totalDiff===0?'color:#00B894;':'color:#FF6B6B;'}">${statusIcon} 差异${totalDiff}件${lossText}</span></div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
+}
+
+// ===== 自动继承 =====
+function checkAutoInherit() {
+  const records = getRecords();
+  if (!records.length) return;
+  if (products.some(p => p.opening !== '')) return;
+  const latest = records[0];
+  document.getElementById('inheritText').textContent = '要用「' + latest.date + '」的晚上库存作为今天的早上库存吗？';
+  document.getElementById('inheritBanner').classList.add('show');
+}
+function hideInheritBanner() { document.getElementById('inheritBanner').classList.remove('show'); }
+function doInherit() {
+  const records = getRecords();
+  if (!records.length) { toast('没有历史记录'); return; }
+  const latest = records[0];
+  latest.items.forEach(item => {
+    const found = products.find(p => p.name === item.name);
+    if (found) found.opening = item.closing;
+    else products.push({ name:item.name, opening:item.closing, received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false });
+  });
+  saveProducts(products); hideInheritBanner(); renderAll(); toast('✅ 已继承昨晚的盘点数');
+}
+
+// ===== 操作 =====
+function updateProduct(i, field, val) {
+  products[i][field] = val;
+  saveProducts(products);
+  renderInventory();
+}
+function deleteProduct(i) {
+  if (!confirm('确定删除「' + products[i].name + '」吗？')) return;
+  products.splice(i, 1); saveProducts(products); renderAll(); toast('🗑️ 已删除');
+}
+function showAddModal() {
+  document.getElementById('addModal').classList.add('show');
+  document.getElementById('newProductName').value = '';
+  setTimeout(() => document.getElementById('newProductName').focus(), 200);
+}
+function hideAddModal() { document.getElementById('addModal').classList.remove('show'); }
+function addProduct() {
+  const name = document.getElementById('newProductName').value.trim();
+  if (!name) { toast('请输入商品名称'); return; }
+  products.push({ name, opening:'', received:'', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false });
+  saveProducts(products); hideAddModal(); renderAll(); toast('✅ 已添加「' + name + '」');
+}
+document.getElementById('newProductName').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') addProduct();
+});
+
+// ===== 保存 =====
+function saveToday() {
+  const hasData = products.some(p => p.opening !== '' || p.closing !== '' || p.realSales !== '');
+  if (!hasData) { toast('还没有数据，先填几个数吧 😊'); return; }
+  const items = products.map(p => {
+    const c = calcCard(p);
+    return { name:p.name, opening:parseFloat(p.opening)||0, received:parseFloat(p.received)||0,
+             closing:parseFloat(p.closing)||0, shouldSell:c.shouldSell,
+             realSales:parseFloat(p.realSales)||0, diff:c.diff,
+             loss:c.loss, lossReason:p.lossReason||'', isPromo:!!p.isPromo };
+  });
+  const records = getRecords();
+  const filtered = records.filter(r => r.date !== today);
+  filtered.unshift({ date:today, items });
+  saveRecords(filtered);
+  toast('💾 已保存！');
+}
+
+// ===== 手动继承 =====
+function loadYesterday() {
+  const records = getRecords();
+  if (!records.length) { toast('还没有历史记录'); return; }
+  const latest = records[0];
+  if (!confirm('用「' + latest.date + '」的晚上盘点作为今天的早上库存？')) return;
+  latest.items.forEach(item => {
+    const found = products.find(p => p.name === item.name);
+    if (found) found.opening = item.closing;
+  });
+  saveProducts(products); renderAll(); toast('✅ 已继承');
+}
+
+// ===== 重置 =====
+function clearAll() {
+  if (!confirm('清空所有商品？历史记录不会删除。')) return;
+  products = []; saveProducts(products); renderAll(); toast('🔄 已清空');
+}
+
+// ===== 历史切换 =====
+function toggleHistory() {
+  document.getElementById('historyBody').classList.toggle('open');
+  document.getElementById('historyToggle').classList.toggle('open');
+}
+
+// ===== 分享 =====
+function showExportModal() {
+  const records = getRecords();
+  if (!records.length) { toast('还没有保存过记录'); return; }
+  const todayRecord = records.find(r => r.date === today);
+  if (!todayRecord) { toast('今天还没保存，先点「保存今天」'); return; }
+  let text = '🥜 食品柜盘点 — ' + today + '\n';
+  text += '━'.repeat(18) + '\n';
+  let totalDiff = 0, totalLoss = 0;
+  todayRecord.items.forEach(it => {
+    const mark = it.diff === 0 ? '✅' : '❌';
+    text += it.name + (it.isPromo ? ' 🔥促销' : '') + '\n';
+    text += '  早上:'+it.opening+' +进货:'+it.received+' -晚上:'+it.closing;
+    if (it.loss) text += ' -报损:'+it.loss;
+    text += ' =应售:'+it.shouldSell+'\n';
+    text += '  实售:'+it.realSales+' '+mark+' 差异:'+it.diff+'\n';
+    totalDiff += Math.abs(it.diff);
+    totalLoss += it.loss || 0;
+  });
+  text += '━'.repeat(18) + '\n';
+  if (totalLoss) text += '📦 报损合计: ' + totalLoss + '件\n';
+  text += totalDiff === 0 ? '🎉 全部对上了！' : '⚠️ 差异合计 '+totalDiff+' 件，需要检查';
+  document.getElementById('exportContent').textContent = text;
+  document.getElementById('exportModal').classList.add('show');
+}
+function hideExportModal() { document.getElementById('exportModal').classList.remove('show'); }
+function copyExport() {
+  const text = document.getElementById('exportContent').textContent;
+  const cb = () => { toast('📋 已复制，去微信粘贴吧'); hideExportModal(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(cb).catch(() => fallbackCopy(text, cb));
+  } else { fallbackCopy(text, cb); }
+}
+function fallbackCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  document.execCommand('copy'); document.body.removeChild(ta); cb();
+}
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.remove('show');
+  void el.offsetWidth; el.classList.add('show');
+}
+document.getElementById('addModal').addEventListener('click', function(e) { if (e.target===this) hideAddModal(); });
+document.getElementById('exportModal').addEventListener('click', function(e) { if (e.target===this) hideExportModal(); });
+</script>
+</body>
+</html>

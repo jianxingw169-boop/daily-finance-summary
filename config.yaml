@@ -1,12 +1,12 @@
 # DeepSeek API 配置
 deepseek:
-  api_key: "your-deepseek-api-key"    # 替换为你的 DeepSeek API Key
+  api_key: "sk-50f8e768565943d78b66d0952763a53b"    # 替换为你的 DeepSeek API Key
   model: "deepseek-chat"              # deepseek-chat 或 deepseek-reasoner
   base_url: "https://api.deepseek.com"
 
 # Server酱 配置
 serverchan:
-  send_key: "your-send-key"           # 替换为你的 Server酱 SendKey
+  send_key: "SCT350177TIJKzfN2WNrvxrHDQp921gcGd"           # 替换为你的 Server酱 SendKey
 
 # 数据配置
 data:

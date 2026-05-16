@@ -3,6 +3,7 @@ import sys
 import time
 import argparse
 import traceback
+from datetime import datetime, timedelta
 
 import yaml
 
@@ -133,6 +134,19 @@ def main():
         import schedule
         run_time = config.get("schedule", {}).get("time", "10:00")
         print(f"定时任务已启动，每天 {run_time} 推送一次。按 Ctrl+C 停止。")
+
+        # 错过时间自动补跑：如果今天设定时间已经过了，立即执行一次
+        now = datetime.now()
+        today_run = datetime.strptime(run_time, "%H:%M").replace(
+            year=now.year, month=now.month, day=now.day
+        )
+        if now >= today_run:
+            print(f"[补跑] 当前时间 {now.strftime('%H:%M')} 已超过设定时间 {run_time}，立即执行一次")
+            run_once(config)
+        else:
+            minutes_until = (today_run - now).seconds // 60
+            print(f"距离下次执行还有约 {minutes_until} 分钟")
+
         schedule.every().day.at(run_time).do(run_once, config=config)
         while True:
             schedule.run_pending()
