@@ -2,7 +2,7 @@
   "name": "双隆购物中心 · 库存管理",
   "short_name": "双隆库存",
   "description": "双隆购物中心每日盘点对账工具",
-  "start_url": "盘点对账.html",
+  "start_url": "index.html",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
