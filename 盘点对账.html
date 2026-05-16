@@ -533,26 +533,36 @@ html, body {
 
 <!-- ===== 扫码弹窗 ===== -->
 <div class="modal" id="scanModal">
-  <div class="modal-inner" style="width:92%;max-width:420px;padding:16px;">
-    <h3 style="display:flex;justify-content:space-between;align-items:center;">
-      📷 扫码
-      <span style="font-size:13px;color:var(--text-light);font-weight:400;" id="scanStatus">准备就绪</span>
+  <div class="modal-inner" style="width:94%;max-width:440px;padding:16px;">
+    <h3 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span>📷 扫码
+        <span style="font-size:12px;font-weight:400;color:var(--text-light);margin-left:6px;" id="scanModeLabel">单次</span>
+      </span>
+      <span style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:13px;color:var(--text-light);font-weight:400;" id="scanStatus">准备就绪</span>
+      </span>
     </h3>
-    <div id="scanReader" style="width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;margin-bottom:12px;"></div>
-    <div id="scanResult" style="display:none;background:#F0FFF4;border:2px solid #00B894;border-radius:10px;padding:12px;margin-bottom:12px;text-align:center;">
+    <div id="scanReader" style="width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;margin-bottom:10px;"></div>
+    <div id="scanResult" style="display:none;background:#F0FFF4;border:2px solid #00B894;border-radius:10px;padding:12px;margin-bottom:8px;text-align:center;">
       <div style="font-size:14px;color:#00B894;" id="scanResultText"></div>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div id="scanBatchResult" style="display:none;background:#FFF8F0;border:1.5px solid #FF9A76;border-radius:10px;padding:10px;margin-bottom:8px;max-height:120px;overflow-y:auto;font-size:13px;">
+      <div style="font-weight:600;margin-bottom:4px;">📋 本次扫码记录</div>
+      <div id="scanBatchList"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
       <button class="btn btn-outline" onclick="stopScan()" style="flex:1;">关闭</button>
       <button class="btn btn-primary" id="scanAgainBtn" onclick="resumeScan()" style="flex:1;display:none;">继续扫码</button>
+      <button class="btn" id="scanModeBtn" onclick="toggleScanMode()" style="flex:0 1 auto;padding:9px 12px;font-size:13px;background:#E8F4FD;border:none;border-radius:8px;color:#2D7D9A;">🔄 连续</button>
     </div>
-    <div style="font-size:12px;color:#bbb;margin-top:8px;text-align:center;">
-      💡 将条码对准摄像头，自动识别后增加收货数量
+    <div style="font-size:12px;color:#bbb;margin-top:8px;text-align:center;" id="scanHint">
+      💡 扫商品条码自动加收货 &nbsp;|&nbsp; 扫供货单二维码批量录入
     </div>
   </div>
 </div>
 
 <!-- Toast -->
+<div class="toast" id="toast"></div><!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -861,17 +871,50 @@ document.getElementById('installGuide').addEventListener('click', function(e) { 
 // ===== 扫码 =====
 let scanHtml5 = null;
 let scanActive = false;
+let scanContinuous = false;
+let lastScanTime = 0;
+let scanBatchLog = [];
 
 function startScan() {
   document.getElementById('scanModal').classList.add('show');
   document.getElementById('scanStatus').textContent = '启动摄像头...';
   document.getElementById('scanResult').style.display = 'none';
   document.getElementById('scanAgainBtn').style.display = 'none';
-
+  document.getElementById('scanBatchResult').style.display = 'none';
+  scanContinuous = false;
+  scanBatchLog = [];
+  updateScanModeUI();
   if ('BarcodeDetector' in window) {
     startNativeScan();
   } else {
     startHtml5Scan();
+  }
+}
+
+function toggleScanMode() {
+  scanContinuous = !scanContinuous;
+  updateScanModeUI();
+  const hint = document.getElementById('scanHint');
+  if (scanContinuous) {
+    hint.innerHTML = '🔁 连续模式：扫一个自动等待下一个 &nbsp;|&nbsp; 点「关闭」结束';
+  } else {
+    hint.innerHTML = '💡 扫商品条码自动加收货 &nbsp;|&nbsp; 扫供货单二维码批量录入';
+  }
+}
+
+function updateScanModeUI() {
+  const btn = document.getElementById('scanModeBtn');
+  const lbl = document.getElementById('scanModeLabel');
+  if (scanContinuous) {
+    btn.textContent = '⏹ 单次';
+    btn.style.background = '#FFF3F0';
+    btn.style.color = '#FF6B6B';
+    lbl.textContent = '连续扫码';
+  } else {
+    btn.textContent = '🔄 连续';
+    btn.style.background = '#E8F4FD';
+    btn.style.color = '#2D7D9A';
+    lbl.textContent = '单次';
   }
 }
 
@@ -901,6 +944,11 @@ async function startNativeScan() {
         const barcodes = await detector.detect(video);
         if (barcodes.length > 0) {
           handleScan(barcodes[0].rawValue);
+          if (scanContinuous) {
+            // In continuous mode, restart scan after a short delay
+            setTimeout(() => { if (scanActive) setTimeout(detectLoop, 500); }, 200);
+            return;
+          }
           return;
         }
       } catch(e) {}
@@ -937,10 +985,26 @@ function initHtml5Scan() {
   scanHtml5 = new Html5Qrcode('scanReader');
   scanActive = true;
   document.getElementById('scanStatus').textContent = '等待扫码...';
+
+  const onScanSuccess = (decodedText) => {
+    if (!scanActive) return;
+    // Debounce: ignore same code within 2 seconds
+    const now = Date.now();
+    if (now - lastScanTime < 2000) return;
+    lastScanTime = now;
+
+    handleScan(decodedText);
+    if (scanContinuous) {
+      // In continuous mode, the scanner keeps running
+      return;
+    }
+    scanHtml5.pause();
+  };
+
   scanHtml5.start(
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: 250, height: 150 } },
-    (decodedText) => { handleScan(decodedText); },
+    onScanSuccess,
     () => {}
   ).catch(err => {
     document.getElementById('scanStatus').textContent = '摄像头启动失败';
@@ -948,20 +1012,64 @@ function initHtml5Scan() {
   });
 }
 
+// Parse QR data: try JSON first, then see if it looks like a delivery order
+function tryParseQRData(text) {
+  try {
+    const data = JSON.parse(text);
+    // Check if it's an array of items
+    if (Array.isArray(data) && data.length > 0 && data[0].name) {
+      return { type: 'order_items', items: data };
+    }
+    // Check if it has items/products key
+    if (data.items && Array.isArray(data.items)) {
+      return { type: 'order_items', items: data.items };
+    }
+    if (data.products && Array.isArray(data.products)) {
+      return { type: 'order_items', items: data.products };
+    }
+    return { type: 'json_other', data: data };
+  } catch(e) {
+    return { type: 'text', text: text };
+  }
+}
+
 function handleScan(barcode) {
   if (!scanActive) return;
   scanActive = false;
 
   try { navigator.vibrate(200); } catch(e) {}
-
   document.getElementById('scanStatus').textContent = '✅ 已识别';
 
+  // Try to parse as QR data (delivery order)
+  const parsed = tryParseQRData(barcode);
+
+  if (parsed.type === 'order_items') {
+    // Delivery order with items!
+    handleDeliveryOrder(parsed.items);
+    return;
+  }
+
+  // Regular barcode scan
   const idx = products.findIndex(p => p.barcode === barcode);
   if (idx >= 0) {
     const cur = parseInt(products[idx].received) || 0;
     products[idx].received = cur + 1;
     saveProducts(products);
     renderInven();
+    addToBatchLog(products[idx].name, cur + 1);
+    if (scanContinuous) {
+      // Continuous: flash result, resume immediately
+      document.getElementById('scanStatus').textContent = '✅ ' + products[idx].name + ' +1';
+      scanActive = true;
+      // Show toast-like flash
+      const rt = document.getElementById('scanResultText');
+      rt.innerHTML = '✅ ' + esc(products[idx].name) + ' <b style="font-size:20px;">+1</b> （共' + (cur+1) + '）';
+      document.getElementById('scanResult').style.display = 'block';
+      setTimeout(() => {
+        if (scanContinuous) document.getElementById('scanResult').style.display = 'none';
+      }, 1500);
+      return;
+    }
     document.getElementById('scanResultText').innerHTML = '✅ ' + esc(products[idx].name) + '<br>收货 +1（共' + (cur+1) + '件）';
     document.getElementById('scanResult').style.display = 'block';
     document.getElementById('scanAgainBtn').style.display = 'block';
@@ -979,20 +1087,73 @@ function handleScan(barcode) {
       addBtn.textContent = '➕ 添加此商品';
       addBtn.style.cssText = 'margin-top:8px;width:100%;';
       addBtn.onclick = function() {
-        const nm = prompt('输入商品名称（默认: 商品' + barcode.slice(-4) + '）', '商品' + barcode.slice(-4));
+        const nm = prompt('输入商品名称', '商品' + barcode.slice(-4));
         if (!nm) return;
         products.push({ name:nm, barcode:barcode, opening:'', received:'1', closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false });
         saveProducts(products);
         renderInven();
         toast('✅ 已添加 ' + nm);
         document.getElementById('scanResult').querySelectorAll('.scan-add-btn').forEach(b => b.remove());
+        if (scanContinuous) { scanActive = true; return; }
         resumeScan();
       };
       document.getElementById('scanResult').appendChild(addBtn);
     }
   }
 
-  stopScan();
+  if (!scanContinuous) {
+    stopScan();
+  } else {
+    scanActive = true;
+  }
+}
+
+function handleDeliveryOrder(items) {
+  let added = 0, updated = 0;
+  items.forEach(item => {
+    const name = item.name || item.product_name || item.goods_name || '商品';
+    const qty = parseInt(item.qty || item.quantity || item.num || item.count || 1) || 1;
+    const code = item.barcode || item.code || '';
+
+    // Find by barcode first, then by name
+    let idx = -1;
+    if (code) idx = products.findIndex(p => p.barcode === code);
+    if (idx < 0) idx = products.findIndex(p => p.name === name);
+
+    if (idx >= 0) {
+      products[idx].received = qty;
+      if (code && !products[idx].barcode) products[idx].barcode = code;
+      updated++;
+    } else {
+      products.push({ name:name, barcode:code, opening:'', received:String(qty), closing:'', realSales:'', loss:'', lossReason:'', minStock:'', isPromo:false });
+      added++;
+    }
+  });
+
+  saveProducts(products);
+  renderInven();
+
+  let msg = '';
+  if (updated) msg += '更新 ' + updated + ' 个商品';
+  if (added) msg += (msg ? '，新增 ' : '新增 ') + added + ' 个商品';
+  document.getElementById('scanResultText').innerHTML = '📋 供货单已录入<br><span style="font-size:13px;">' + msg + '</span>';
+  document.getElementById('scanResult').style.display = 'block';
+  document.getElementById('scanAgainBtn').style.display = 'block';
+  document.getElementById('scanStatus').textContent = '✅ 供货单';
+
+  addToBatchLog('📋 供货单', items.length + '项商品');
+}
+
+function addToBatchLog(name, detail) {
+  scanBatchLog.push({ name, detail, time: new Date().toLocaleTimeString() });
+  const box = document.getElementById('scanBatchResult');
+  const list = document.getElementById('scanBatchList');
+  box.style.display = 'block';
+  list.innerHTML = scanBatchLog.map(entry =>
+    '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #f0e0d0;font-size:13px;">' +
+    '<span>' + esc(entry.name) + '</span>' +
+    '<span style="color:var(--text-light);">' + entry.detail + '</span></div>'
+  ).join('');
 }
 
 function stopScan() {
@@ -1008,14 +1169,14 @@ function resumeScan() {
   document.getElementById('scanResult').style.display = 'none';
   document.getElementById('scanAgainBtn').style.display = 'none';
   document.getElementById('scanResult').querySelectorAll('.scan-add-btn').forEach(b => b.remove());
+  document.getElementById('scanBatchResult').style.display = 'none';
+  scanBatchLog = [];
   startScan();
 }
 
 document.getElementById('scanModal').addEventListener('click', function(e) {
   if (e.target === this) stopScan();
-});
-
-// ===== Toast =====
+});// ===== Toast =====
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.remove('show');
